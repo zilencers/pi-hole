@@ -10,7 +10,7 @@ check_packages() {
    printf "Checking for required packages ..."
    
    local _packages=$(dnf list $PKGS | grep -A25 "Available Packages" | grep -o "[a-zA-Z]*\.x86_64")
-   dnf -y install $_packages
+   dnf -y -q install $_packages
    
    printf "Done\n"
 }
@@ -29,9 +29,9 @@ config_dns() {
 add_firewall_rules() {
    printf "Adding firewall rules ..."
 
-   for i in ${TCP_PORT[@]}; do firewall-cmd --permanent --zone=$ZONE --add-port=$i/tcp; done
-   for i in ${UDP_PORT[@]}; do firewall-cmd --permanent --zone=$ZONE --add-port=$i/udp; done
-   firewall-cmd --reaload
+   for i in ${TCP_PORT[@]}; do firewall-cmd -q --permanent --zone=$ZONE --add-port=$i/tcp; done
+   for i in ${UDP_PORT[@]}; do firewall-cmd -q --permanent --zone=$ZONE --add-port=$i/udp; done
+   firewall-cmd --reload
 
    printf "Done\n"
 }
