@@ -1,0 +1,127 @@
+#!/bin/bash
+
+
+usage() {
+   echo "USAGE: "
+
+}
+
+check_packages() {
+   printf "Checking for required packages ..."
+   
+   local _packages=$(dnf list $PKGS | grep -A25 "Available Packages" | grep -o "[a-zA-Z]*\.x86_64")
+   dnf -y install $_packages
+   
+   printf "Done\n"
+}
+
+config_dns() {
+   printf "Configuring DNS ..."
+
+   systemctl disable systemd-resolved
+   systemctl stop systemd-resolved
+   unlink /etc/resolv.conf
+   systemctl restart NetworkManager
+
+   printf "Done\n"
+}
+
+add_firewall_rules() {
+   printf "Adding firewall rules ..."
+
+   for i in ${TCP_PORT[@]}; do firewall-cmd --permanent --zone=$ZONE --add-port=$i/tcp; done
+   for i in ${UDP_PORT[@]}; do firewall-cmd --permanent --zone=$ZONE --add-port=$i/udp; done
+   firewall-cmd --reaload
+
+   printf "Done\n"
+}
+
+create_volume() {
+   printf "Creating volumes ..."
+   
+   for i in ${VOLUMES[@]}; do podman volume create $i; done
+  
+   printf "Done\n"
+}
+
+get_image() {
+   printf "Pulling images ..."
+
+   podman pull $IMG
+
+   printf "Done\n"
+}
+
+create_container() {
+   podman run --name=$NAME \
+     --hostname=$HOSTNAME \
+     --cap-add=NET_ADMIN \
+     --dns=127.0.0.1 \
+     --dns=9.9.9.9 \
+     -e TZ=$TIMEZONE \
+     -e SERVERIP=$SERVER_IP \
+     -e WEBPASSWORD=$WEB_PASSWORD \
+     -e DNS1=$DNS1 \
+     -e DNS2=$DNS2 \
+     -e DNSSEC=$DNSSEC \
+     -e CONDITIONAL_FORWARDING=$CONDITIONAL_FWD \
+     -e CONDITIONAL_FORWARDING_IP=$CONDITIONAL_FWD_IP \
+     -e CONDITIONAL_FORWARDING_DOMAIN=$CONDITIONAL_FWD_DOMAIN \
+     -e TEMPERATUREUNIT=$TEMP_UNIT \
+     -v pihole_pihole:/etc/pihole:Z \
+     -v pihole_dnsmasq:/etc/dnsmasq.d:Z \
+     -p 80:80/tcp \
+     -p 443:443/tcp \
+     -p 67:67/udp \
+     -p 53:53/tcp \
+     -p 53:53/udp \
+     pihole/pihole
+}
+
+get_args() {
+   while (($#)); do
+      case $1 in
+	 -c|--con-name)
+	    CONTAINER_NAME=$2
+	    shift 2
+	    ;;
+	 -d|--dns)
+	    DNS=$2
+	    shift 2
+	    ;;
+	 -f|--file)
+	    source <(grep = $2)
+	    shift 2
+	    ;;
+	 -h|--hostname)
+	    HOSTNAME=$2
+	    shift 2
+	    ;;
+	 -p|--password)
+	    PASSWORD=$2
+	    shift 2
+	    ;;
+         -s|--server-ip)
+	    SERVER_IP=$2
+	    shift 2
+	    ;;
+	 -t|--timezone)
+	    TIMEZONE=$2
+	    shift 2
+	    ;;
+      esac
+   done
+}
+
+main () {
+   get_args $@
+   check_packages
+   config_dns
+   add_firewall_rules
+   create_volume
+   get_image
+   create_container
+}
+
+main $@
+
