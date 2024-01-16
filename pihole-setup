@@ -6,12 +6,17 @@ usage() {
 
 }
 
+check_privilege() {
+   local _user=$(whoami)
+   [ ! $_user = "root" ] && sudo echo ""
+}
+
 check_packages() {
    printf "Checking for required packages ..."
    
    local _packages=$(dnf list $PKGS | grep -A25 "Available Packages" | grep -o "[a-zA-Z]*\.x86_64")
    dnf -y -q install $_packages
-   
+
    printf "Done\n"
 }
 
@@ -31,16 +36,21 @@ add_firewall_rules() {
 
    for i in ${TCP_PORT[@]}; do firewall-cmd -q --permanent --zone=$ZONE --add-port=$i/tcp; done
    for i in ${UDP_PORT[@]}; do firewall-cmd -q --permanent --zone=$ZONE --add-port=$i/udp; done
-   firewall-cmd --reload
+   firewall-cmd -q --reload
 
    printf "Done\n"
 }
 
 create_volume() {
-   printf "Creating volumes ..."
+   printf "Creating storage volumes ..."
+
+   sudo -k
    
-   for i in ${VOLUMES[@]}; do podman volume create $i; done
-  
+   for i in ${VOLUMES[@]}; do
+      local _volume=$(podman volume ls | grep -o $i)
+      [ -n "$_volume" ] && podman volume create $i
+   done
+   
    printf "Done\n"
 }
 
@@ -115,6 +125,7 @@ get_args() {
 
 main () {
    get_args $@
+   check_privilege
    check_packages
    config_dns
    add_firewall_rules
